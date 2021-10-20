@@ -127,31 +127,23 @@ const server = http.createServer((req, res) => {
   })
 })
 
-server.listen(argv.port, argv.host, (err) => {
-  if (err) throw err
-  console.log(`listening on port ${server.address().port}`)
-})
  
 if (kbd) {
-  const say = (text) => {
-		// kbd.write(commandToBytes({
-		// 	id: 2,
-		// 	data: `clear`,
-		// }));
-		kbd.write(
-			commandToBytes({
-				id: 1,
-				data: text,
-			})
-		);
-	};
+  // const say = (text) => {
+  //   if (kbd) {
+  //    kbd.write(commandToBytes({id: 2, data: ""}));
+  //    let bite = commandToBytes({
+	// 			id: 1,
+	// 			data: text,
+	// 		});
+  //     kbd.write(bite);
+  //   }
+	// };
 
-
-  writeCommand(kbd, { id: 1, data: "loading" });
+  writeCommand(kbd, { id: 3, data: "loading" });
   // get the weather in brisbane from openweathermap.org and print it out
   let weather
-
-  const getWeather = (err, data) => {
+  const getWeather = async () => {
     request(
 			"http://api.openweathermap.org/data/2.5/weather?q=brisbane&units=metric&APPID=78f85d611003bb90d180d7ba145484f4",
 			(err, res, body) => {
@@ -159,19 +151,27 @@ if (kbd) {
 			  weather = JSON.parse(body);
 			}
 		);
+    return true
   }
   setInterval(() => {
    getWeather()
   }, 300000);
    getWeather()
 
-  setInterval(() => {
+  // setInterval(() => {
     var datetime = new Date(new Date()).toString().split(" ")[4];
     if (weather) {
-      say(`${datetime} ${weather.weather[0].description}   ${weather.main.temp}°C`);
+      writeCommand(kbd, {
+        id: 3,
+        data: `${datetime} - cc${weather.main.temp}C    ${weather.weather[0].description}`
+      });
     } else {
-     say(`${datetime} loading weather`);
+     writeCommand(kbd, { id: 3, data: `${datetime} loading weather` });
     }
-    say(`${datetime} ${info.main.temp} C ${info.weather[0].main}`);
-	}, 1000);
+	// }, 2000);
 }
+
+server.listen(argv.port, argv.host, (err) => {
+	if (err) throw err;
+	console.log(`listening on port ${server.address().port}`);
+});
