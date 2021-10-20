@@ -5,6 +5,7 @@
   "dependencies": {
     "body": "^5.1.0",
     "node-hid": "^2.1.1",
+    "request": "^2.88.2",
     "send-data": "^8.0.0",
     "yargs": "^17.0.1"
   },

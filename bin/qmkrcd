@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict'
-
+const request = require('request')
 const yargs = require('yargs/yargs')
 const { commandToBytes } = require('../qmk-rc.js')
 const http = require('http')
@@ -65,6 +65,7 @@ const writeCommand = (kbd, command) => {
   return bytes
 }
 
+
 const onerror = (err) => {
   console.log(err)
   process.exit(1)
@@ -114,7 +115,7 @@ const server = http.createServer((req, res) => {
         body: { message: '`id` field is required' }
       })
     }
-
+    
     const bytesSent = writeCommand(kbd, body)
     return sendJson(req, res, {
       statusCode: 200,
@@ -130,3 +131,47 @@ server.listen(argv.port, argv.host, (err) => {
   if (err) throw err
   console.log(`listening on port ${server.address().port}`)
 })
+ 
+if (kbd) {
+  const say = (text) => {
+		// kbd.write(commandToBytes({
+		// 	id: 2,
+		// 	data: `clear`,
+		// }));
+		kbd.write(
+			commandToBytes({
+				id: 1,
+				data: text,
+			})
+		);
+	};
+
+
+  writeCommand(kbd, { id: 1, data: "loading" });
+  // get the weather in brisbane from openweathermap.org and print it out
+  let weather
+
+  const getWeather = (err, data) => {
+    request(
+			"http://api.openweathermap.org/data/2.5/weather?q=brisbane&units=metric&APPID=78f85d611003bb90d180d7ba145484f4",
+			(err, res, body) => {
+				if (err) return console.error(err);
+			  weather = JSON.parse(body);
+			}
+		);
+  }
+  setInterval(() => {
+   getWeather()
+  }, 300000);
+   getWeather()
+
+  setInterval(() => {
+    var datetime = new Date(new Date()).toString().split(" ")[4];
+    if (weather) {
+      say(`${datetime} ${weather.weather[0].description}   ${weather.main.temp}°C`);
+    } else {
+     say(`${datetime} loading weather`);
+    }
+    say(`${datetime} ${info.main.temp} C ${info.weather[0].main}`);
+	}, 1000);
+}
