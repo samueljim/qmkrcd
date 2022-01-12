@@ -67,45 +67,63 @@ const getTargetDevice = (target) => {
   return targetDevice[0]
 }
 
-const writeCommand = (kbd, command) => {
+const writeCommand = (command) => {
   try {
     const bytes = commandToBytes(command)
-    // console.log(kbd, command, bytes);
-    kbd.write(bytes);
-    return bytes
+    if (keyboard) {
+      keyboard.write(bytes);
+    } else {
+      keyboard = getDevice();
+    }
   } catch (e) {
-    console.log(e) 
+    keyboard = false
+    // console.log(e) 
   }
 }
 
-const onerror = (err) => {
-  console.log(err)
-  process.exit(1)
+const targetSpec = process.argv[2];
+const target = targetSpec && getTargetDevice(targetSpec);
+
+let keyboard
+const getDevice = () => {
+  const devices = HID.devices();
+  const device = devices.find(
+    (d) =>
+      (target
+        ? d.vendorId === target.VENDOR_ID && d.productId === target.PRODUCT_ID
+        : true) &&
+      d.usage === DEFAULT_USAGE.usage &&
+      d.usagePage === DEFAULT_USAGE.usagePage
+  );
+  if (device && device.path) {
+    try {
+      let kbd = new HID.HID(device.path);
+      return kbd;
+    } catch (e) {
+      console.log(e)
+      return false; 
+      // can't connect to device
+    }
+  }
+  return false; 
 }
 
-const targetSpec = process.argv[2] 
-const target = targetSpec && getTargetDevice(targetSpec)
+// const onerror = (err) => {
+//   console.log(err)
+//   process.exit(1)
+// }
 
-const device = devices.find(d =>
-  (target ?
-    (d.vendorId === target.VENDOR_ID &&
-    d.productId === target.PRODUCT_ID) : true)
-  &&
-    d.usage === DEFAULT_USAGE.usage &&
-    d.usagePage === DEFAULT_USAGE.usagePage
-)
+// if (!device) {
+//   console.error('device not found (is the device connected? is raw HID enabled?)')
+//   console.error('following devices were detected:')
+//   console.log(devices)
+//   process.exit(2)
+// }
 
-if (!device) {
-  console.error('device not found (is the device connected? is raw HID enabled?)')
-  console.error('following devices were detected:')
-  console.log(devices)
-  process.exit(2)
-}
+// let kbd = new HID.HID(device.path)
+// kbd.on('error', onerror)
 
-let kbd = new HID.HID(device.path)
-kbd.on('error', onerror)
-
-console.log(`connected to ${device.manufacturer} ${device.product}`)
+// console.log(`connected to ${device.manufacturer} ${device.product}`)
 
 // const server = http.createServer((req, res) => {
 //   if (req.method !== 'POST' || req.url !== '/command') {
@@ -171,10 +189,14 @@ class Weather {
         console.log(err);
       });
     setInterval(() => {
-      getWeather().then((res) => { 
-        this.weather = res
-      }).catch((err) => { console.log(err) });
-    }, 10000);
+      getWeather()
+        .then((res) => {
+          this.weather = res;
+        })
+        .catch((err) => {
+          console.log(err);
+        });
+    }, 600000);
   }
  
   get temp() {
@@ -200,7 +222,7 @@ async function talkToKeyboard(screen) {
     }
     var datetime = new Date(new Date()).toString().split(" ")[4].toString();
     let output = `${datetime}\n\n${brisbane.temp || ""}C ${brisbane.description || ""}`;
-    writeCommand(kbd, {
+    writeCommand({
       id: 3,
       data: `${output}`,
     });
@@ -213,7 +235,7 @@ async function talkToKeyboard(screen) {
 }
 talkToKeyboard()
 
-if (kbd) {
+// if (kbd) {
  
   // const say = (text) => {
   //   if (kbd) {
@@ -242,7 +264,7 @@ if (kbd) {
   //     });
   //   }, 1000);
   // }
-}
+// }
 
 // server.listen(argv.port, argv.host, (err) => {
 // 	if (err) throw err;
