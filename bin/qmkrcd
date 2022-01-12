@@ -8,6 +8,14 @@ const HID = require('node-hid');
 const jsonBody = require('body/json')
 const sendJson = require('send-data/json')
 const DEVICES = require('../devices')
+// const { usb, getDeviceList } = require("usb");
+// const devices = getDeviceList();
+  
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 const argv = yargs(process.argv.slice(2))
   .option('host', {
@@ -60,11 +68,15 @@ const getTargetDevice = (target) => {
 }
 
 const writeCommand = (kbd, command) => {
-  const bytes = commandToBytes(command)
-  kbd.write(bytes)
-  return bytes
+  try {
+    const bytes = commandToBytes(command)
+    // console.log(kbd, command, bytes);
+    kbd.write(bytes);
+    return bytes
+  } catch (e) {
+    console.log(e) 
+  }
 }
-
 
 const onerror = (err) => {
   console.log(err)
@@ -90,88 +102,149 @@ if (!device) {
   process.exit(2)
 }
 
-const kbd = new HID.HID(device.path)
+let kbd = new HID.HID(device.path)
 kbd.on('error', onerror)
 
 console.log(`connected to ${device.manufacturer} ${device.product}`)
 
-const server = http.createServer((req, res) => {
-  if (req.method !== 'POST' || req.url !== '/command') {
-    res.writeHead(404)
-    return res.end()
-  }
+// const server = http.createServer((req, res) => {
+//   if (req.method !== 'POST' || req.url !== '/command') {
+//     res.writeHead(404)
+//     return res.end()
+//   }
 
-  jsonBody(req, res, (err, body) => {
-    if (err) {
-      return sendJson(req, res, {
-        statusCode: 400,
-        body: { message: 'Bad Request' }
-      })
-    }
+//   jsonBody(req, res, (err, body) => {
+//     try {
+//       if (err) {
+//         console.log(err);
+//         let error = sendJson(req, res, {
+//           statusCode: 400,
+//           body: { message: "Bad Request" },
+//         });
+//         return error;
+//       }
 
-    if (typeof body.id === 'undefined') {
-      return sendJson(req, res, {
-        statusCode: 400,
-        body: { message: '`id` field is required' }
-      })
-    }
-    
-    const bytesSent = writeCommand(kbd, body)
-    return sendJson(req, res, {
-      statusCode: 200,
-      body: {
-        message: 'Command sent',
-        bytes: bytesSent
+//       if (typeof body.id === "undefined") {
+//         let error = sendJson(req, res, {
+//           statusCode: 400,
+//           body: { message: "`id` field is required" },
+//         });
+//         return error;
+//       }
+
+//       const bytesSent = writeCommand(kbd, body);
+//       let message = sendJson(req, res, {
+//         statusCode: 200,
+//         body: {
+//           message: "Command sent",
+//           bytes: bytesSent,
+//         },
+//       });
+//       return message;
+//     } catch (e) {
+//       console.log(e);
+//     }
+//   })
+// })
+
+let weather = false;
+const getWeather = async () => {
+  return new Promise((resolve, reject) => {
+    request(
+      "http://api.openweathermap.org/data/2.5/weather?q=brisbane&units=metric&APPID=78f85d611003bb90d180d7ba145484f4",
+      (err, res, body) => {
+        if (err) return reject(err);
+        weather = JSON.parse(body);
+        resolve(weather);
       }
-    })
-  })
-})
+    );
+  });
+};
 
+class Weather {
+  constructor() {
+    getWeather()
+      .then((res) => {
+        this.weather = res;
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+    setInterval(() => {
+      getWeather().then((res) => { 
+        this.weather = res
+      }).catch((err) => { console.log(err) });
+    }, 10000);
+  }
  
+  get temp() {
+    if (this.weather && this.weather.main && this.weather.main.temp) {
+      return Math.floor(this.weather.main.temp);
+    }
+  }
+  get description() {
+    if (
+      this.weather && this.weather.weather &&
+      this.weather.weather[0]
+    ) {
+      return this.weather.weather[0].main;
+    }
+  }
+}
+
+const brisbane = new Weather();
+async function talkToKeyboard(screen) {
+  while(true) {
+    if (process.platform  === "darwin") {
+      await wait(500);
+    }
+    var datetime = new Date(new Date()).toString().split(" ")[4].toString();
+    let output = `${datetime}\n\n${brisbane.temp || ""}C ${brisbane.description || ""}`;
+    writeCommand(kbd, {
+      id: 3,
+      data: `${output}`,
+    });
+    if (process.platform === "darwin") {
+      await wait(500);
+    } else {
+      await wait(1000);
+    }
+  }
+}
+talkToKeyboard()
+
 if (kbd) {
+ 
   // const say = (text) => {
   //   if (kbd) {
   //    kbd.write(commandToBytes({id: 2, data: ""}));
   //    let bite = commandToBytes({
-	// 			id: 1,
-	// 			data: text,
-	// 		});
+  // 			id: 1,
+  // 			data: text,
+  // 		});
   //     kbd.write(bite);
   //   }
-	// };
+  // };
 
-  writeCommand(kbd, { id: 3, data: "loading" });
+  // writeCommand(kbd, { id: 3, data: "po poop" });
   // get the weather in brisbane from openweathermap.org and print it out
-  let weather
-  const getWeather = async () => {
-    request(
-			"http://api.openweathermap.org/data/2.5/weather?q=brisbane&units=metric&APPID=78f85d611003bb90d180d7ba145484f4",
-			(err, res, body) => {
-				if (err) return console.error(err);
-			  weather = JSON.parse(body);
-			}
-		);
-    return true
-  }
-  setInterval(() => {
-   getWeather()
-  }, 300000);
-   getWeather()
+ 
 
-  // setInterval(() => {
-    var datetime = new Date(new Date()).toString().split(" ")[4];
-    if (weather) {
-      writeCommand(kbd, {
-        id: 3,
-        data: `${datetime} - cc${weather.main.temp}C    ${weather.weather[0].description}`
-      });
-    } else {
-     writeCommand(kbd, { id: 3, data: `${datetime} loading weather` });
-    }
-	// }, 2000);
+  // if (process.platform !== "darwin") {
+  //   setInterval(() => {
+  //     let output = `${datetime} - ${brisbane.temp || "loading"}C    ${
+  //       brisbane.description || "loading"
+  //     }`;
+  //     console.log(output);
+  //     writeCommand(kbd, {
+  //       id: 3,
+  //       data: output,
+  //     });
+  //   }, 1000);
+  // }
 }
 
-server.listen(argv.port, argv.host, (err) => {
-	if (err) throw err;
-	console.log(`listening on port ${server.address().port}`);
-});
+// server.listen(argv.port, argv.host, (err) => {
+// 	if (err) throw err;
+// 	console.log(`listening on port ${server.address().port}`);
+// });
